@@ -1,28 +1,23 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 
 const GRID = 1000
+const MIN_ZOOM = 1
+const MAX_ZOOM = 40
 
 export default function MillionCanvas({ purchases = [], onSelect }) {
-  const canvasRef = useRef(null)
-  const imagesRef = useRef({})
-  const [scale, setScale] = useState(1)
+  const canvasRef  = useRef(null)
+  const wrapRef    = useRef(null)
+  const imagesRef  = useRef({})
+  const stateRef   = useRef({ zoom: 1, panX: 0, panY: 0 })   // mutable, avoids stale closures
+  const dragRef    = useRef(null)   // { mode: 'pan'|'select', startX, startY, ... }
+  const soldMapRef = useRef({})
+
+  const [zoom, setZoom]       = useState(1)
   const [tooltip, setTooltip] = useState(null)
-  const [drag, setDrag] = useState(null)     // { startX, startY, endX, endY }
-  const [isDragging, setIsDragging] = useState(false)
+  const [selBox, setSelBox]   = useState(null)   // canvas coords
+  const [, forceRender]       = useState(0)
 
-  // Responsive scale
-  useEffect(() => {
-    function resize() {
-      const w = canvasRef.current?.parentElement?.clientWidth || 800
-      setScale(Math.min(1, w / GRID))
-    }
-    resize()
-    window.addEventListener('resize', resize)
-    return () => window.removeEventListener('resize', resize)
-  }, [])
-
-  // Sold map for hit-testing
-  const soldMap = useRef({})
+  // ── Build sold map ───────────────────────────────────────────────
   useEffect(() => {
     const m = {}
     for (const p of purchases) {
@@ -33,27 +28,53 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
         }
       }
     }
-    soldMap.current = m
+    soldMapRef.current = m
   }, [purchases])
 
-  // Draw
-  useEffect(() => {
+  // ── Draw ─────────────────────────────────────────────────────────
+  const draw = useCallback(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const ctx = canvas.getContext('2d')
+    const ctx   = canvas.getContext('2d')
+    const { zoom: z, panX, panY } = stateRef.current
+    const W = canvas.width, H = canvas.height
 
-    ctx.fillStyle = '#0f172a'
-    ctx.fillRect(0, 0, GRID, GRID)
+    ctx.clearRect(0, 0, W, H)
+    ctx.save()
+    ctx.scale(z, z)
+    ctx.translate(-panX, -panY)
 
-    // Subtle grid every 10px
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)'
-    ctx.lineWidth = 0.5
-    for (let i = 0; i <= GRID; i += 10) {
-      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, GRID); ctx.stroke()
-      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(GRID, i); ctx.stroke()
+    // Background
+    ctx.fillStyle = '#09090b'
+    ctx.fillRect(panX, panY, W / z, H / z)
+
+    // Grid (only when zoomed enough to be visible)
+    if (z >= 4) {
+      ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.08, (z - 4) * 0.015)})`
+      ctx.lineWidth = 0.5 / z
+      const step = 1
+      const x0 = Math.floor(panX / step) * step
+      const y0 = Math.floor(panY / step) * step
+      const x1 = panX + W / z
+      const y1 = panY + H / z
+      for (let x = x0; x <= x1; x += step) {
+        ctx.beginPath(); ctx.moveTo(x, panY); ctx.lineTo(x, y1); ctx.stroke()
+      }
+      for (let y = y0; y <= y1; y += step) {
+        ctx.beginPath(); ctx.moveTo(panX, y); ctx.lineTo(x1, y); ctx.stroke()
+      }
+    } else if (z >= 1.5) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+      ctx.lineWidth = 0.5 / z
+      for (let x = 0; x <= GRID; x += 10) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GRID); ctx.stroke()
+      }
+      for (let y = 0; y <= GRID; y += 10) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(GRID, y); ctx.stroke()
+      }
     }
 
-    // Purchased blocks
+    // Purchases
     for (const p of purchases) {
       const img = imagesRef.current[p.image_url]
       if (img && img !== 'loading') {
@@ -65,59 +86,148 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
           imagesRef.current[p.image_url] = 'loading'
           const im = new Image()
           im.crossOrigin = 'anonymous'
-          im.onload = () => { imagesRef.current[p.image_url] = im; setScale(s => s) }
+          im.onload = () => { imagesRef.current[p.image_url] = im; draw() }
           im.src = p.image_url
         }
       }
-      ctx.strokeStyle = 'rgba(255,255,255,0.12)'
-      ctx.lineWidth = 0.5
+      ctx.strokeStyle = 'rgba(255,255,255,0.1)'
+      ctx.lineWidth = 0.5 / z
       ctx.strokeRect(p.px, p.py, p.pw, p.ph)
     }
 
-    // Drag selection
-    if (drag) {
-      const x = Math.min(drag.startX, drag.endX)
-      const y = Math.min(drag.startY, drag.endY)
-      const w = Math.abs(drag.endX - drag.startX) + 1
-      const h = Math.abs(drag.endY - drag.startY) + 1
-      ctx.fillStyle = 'rgba(249,115,22,0.25)'
-      ctx.fillRect(x, y, w, h)
+    // Selection box
+    if (selBox) {
+      ctx.fillStyle = 'rgba(249,115,22,0.2)'
+      ctx.fillRect(selBox.x, selBox.y, selBox.w, selBox.h)
       ctx.strokeStyle = '#f97316'
-      ctx.lineWidth = 1.5
-      ctx.strokeRect(x, y, w, h)
+      ctx.lineWidth = 1.5 / z
+      ctx.strokeRect(selBox.x, selBox.y, selBox.w, selBox.h)
 
-      // Label
-      const px = w * h
-      ctx.fillStyle = '#f97316'
-      ctx.font = 'bold 12px Inter, sans-serif'
-      ctx.fillText(`${px.toLocaleString()} px · S/${px.toLocaleString()}`, x + 2, y - 4 > 14 ? y - 4 : y + h + 14)
+      if (selBox.w > 0 && selBox.h > 0) {
+        const px = selBox.w * selBox.h
+        ctx.fillStyle = '#f97316'
+        ctx.font = `bold ${Math.max(8, 12 / z)}px Geist, Inter, sans-serif`
+        ctx.fillText(
+          `${px.toLocaleString()} px · S/${px.toLocaleString()}`,
+          selBox.x + 1 / z,
+          selBox.y > 20 / z ? selBox.y - 3 / z : selBox.y + selBox.h + 12 / z
+        )
+      }
     }
-  }, [purchases, drag, scale])
 
-  function getPos(e) {
+    ctx.restore()
+  }, [purchases, selBox])
+
+  useEffect(() => { draw() }, [draw])
+
+  // ── Resize canvas to container ────────────────────────────────────
+  useEffect(() => {
+    const ro = new ResizeObserver(() => {
+      const wrap = wrapRef.current
+      const canvas = canvasRef.current
+      if (!wrap || !canvas) return
+      canvas.width  = wrap.clientWidth
+      canvas.height = wrap.clientWidth   // square aspect ratio for 1:1 grid
+      clampPan()
+      draw()
+    })
+    if (wrapRef.current) ro.observe(wrapRef.current)
+    return () => ro.disconnect()
+  }, [draw])
+
+  // ── Helpers ───────────────────────────────────────────────────────
+  function clampPan() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const s = stateRef.current
+    const maxPanX = Math.max(0, GRID - canvas.width  / s.zoom)
+    const maxPanY = Math.max(0, GRID - canvas.height / s.zoom)
+    s.panX = Math.max(0, Math.min(s.panX, maxPanX))
+    s.panY = Math.max(0, Math.min(s.panY, maxPanY))
+  }
+
+  function canvasPosFromEvent(e) {
     const rect = canvasRef.current.getBoundingClientRect()
-    const x = Math.max(0, Math.min(GRID - 1, Math.floor((e.clientX - rect.left) / scale)))
-    const y = Math.max(0, Math.min(GRID - 1, Math.floor((e.clientY - rect.top) / scale)))
-    return { x, y }
+    const s = stateRef.current
+    const cx = (e.clientX - rect.left) * (canvasRef.current.width  / rect.width)
+    const cy = (e.clientY - rect.top)  * (canvasRef.current.height / rect.height)
+    return {
+      x: Math.max(0, Math.min(GRID - 1, Math.floor(cx / s.zoom + s.panX))),
+      y: Math.max(0, Math.min(GRID - 1, Math.floor(cy / s.zoom + s.panY))),
+      cx, cy,
+    }
   }
 
-  function handleMouseDown(e) {
-    const { x, y } = getPos(e)
-    setDrag({ startX: x, startY: y, endX: x, endY: y })
-    setIsDragging(true)
-    setTooltip(null)
+  function applyZoom(newZoom, cx, cy) {
+    const s = stateRef.current
+    const oldZoom = s.zoom
+    newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, newZoom))
+    // Keep the canvas point under cursor fixed
+    s.panX = s.panX + cx / oldZoom - cx / newZoom
+    s.panY = s.panY + cy / oldZoom - cy / newZoom
+    s.zoom = newZoom
+    clampPan()
+    setZoom(newZoom)
+    draw()
   }
 
-  function handleMouseMove(e) {
-    const { x, y } = getPos(e)
+  // ── Wheel zoom ────────────────────────────────────────────────────
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    function onWheel(e) {
+      e.preventDefault()
+      const rect = canvas.getBoundingClientRect()
+      const cx = (e.clientX - rect.left) * (canvas.width / rect.width)
+      const cy = (e.clientY - rect.top)  * (canvas.height / rect.height)
+      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
+      applyZoom(stateRef.current.zoom * factor, cx, cy)
+    }
+    canvas.addEventListener('wheel', onWheel, { passive: false })
+    return () => canvas.removeEventListener('wheel', onWheel)
+  }, [draw])
 
-    if (isDragging && drag) {
-      setDrag(d => ({ ...d, endX: x, endY: y }))
+  // ── Mouse events ──────────────────────────────────────────────────
+  function onMouseDown(e) {
+    const { x, y, cx, cy } = canvasPosFromEvent(e)
+    const s = stateRef.current
+    dragRef.current = {
+      mode:    s.zoom > 1.5 ? 'pan' : 'select',
+      startX:  x, startY: y,
+      startCx: cx, startCy: cy,
+      lastCx:  cx, lastCy:  cy,
+    }
+  }
+
+  function onMouseMove(e) {
+    const { x, y, cx, cy } = canvasPosFromEvent(e)
+    const s = stateRef.current
+    const d = dragRef.current
+
+    if (d) {
+      if (d.mode === 'pan') {
+        const dx = (cx - d.lastCx) / s.zoom
+        const dy = (cy - d.lastCy) / s.zoom
+        s.panX -= dx
+        s.panY -= dy
+        d.lastCx = cx
+        d.lastCy = cy
+        clampPan()
+        draw()
+      } else {
+        // select mode
+        const sx = Math.min(d.startX, x)
+        const sy = Math.min(d.startY, y)
+        const sw = Math.abs(x - d.startX) + 1
+        const sh = Math.abs(y - d.startY) + 1
+        setSelBox({ x: sx, y: sy, w: sw, h: sh })
+      }
+      setTooltip(null)
       return
     }
 
-    // Tooltip for purchased blocks
-    const owner = soldMap.current[x]?.[y]
+    // Hover tooltip
+    const owner = soldMapRef.current[x]?.[y]
     if (owner) {
       setTooltip({ clientX: e.clientX, clientY: e.clientY, purchase: owner })
     } else {
@@ -125,78 +235,95 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
     }
   }
 
-  function handleMouseUp(e) {
-    if (!isDragging || !drag) return
-    setIsDragging(false)
+  function onMouseUp(e) {
+    const d = dragRef.current
+    dragRef.current = null
+    if (!d) return
 
-    const x = Math.min(drag.startX, drag.endX)
-    const y = Math.min(drag.startY, drag.endY)
-    const w = Math.abs(drag.endX - drag.startX) + 1
-    const h = Math.abs(drag.endY - drag.startY) + 1
-
-    setDrag(null)
-
-    // Check if clicking on a sold block
-    const { x: cx, y: cy } = getPos(e)
-    const owner = soldMap.current[cx]?.[cy]
-    if (owner) {
-      if (owner.destination_link) window.open(owner.destination_link, '_blank')
-      return
+    if (d.mode === 'select' && selBox) {
+      setSelBox(null)
+      const { x, y } = canvasPosFromEvent(e)
+      const owner = soldMapRef.current[x]?.[y]
+      if (owner?.destination_link) { window.open(owner.destination_link, '_blank'); return }
+      const sx = Math.min(d.startX, x)
+      const sy = Math.min(d.startY, y)
+      const sw = Math.abs(x - d.startX) + 1
+      const sh = Math.abs(y - d.startY) + 1
+      onSelect?.({ x: sx, y: sy, w: sw, h: sh, pixels: sw * sh })
     }
-
-    onSelect?.({ x, y, w, h, pixels: w * h })
   }
 
-  function handleMouseLeave() {
-    if (isDragging && drag) {
-      setIsDragging(false)
-      setDrag(null)
-    }
+  function onMouseLeave() {
+    dragRef.current = null
+    setSelBox(null)
     setTooltip(null)
   }
 
+  // ── Zoom buttons ──────────────────────────────────────────────────
+  function zoomIn()    { const c = canvasRef.current; applyZoom(stateRef.current.zoom * 2, c.width / 2, c.height / 2) }
+  function zoomOut()   { const c = canvasRef.current; applyZoom(stateRef.current.zoom / 2, c.width / 2, c.height / 2) }
+  function resetZoom() { stateRef.current.zoom = 1; stateRef.current.panX = 0; stateRef.current.panY = 0; setZoom(1); draw() }
+
   const soldPixels = purchases.reduce((s, p) => s + (p.pw ?? 0) * (p.ph ?? 0), 0)
-  const pct = ((soldPixels / (GRID * GRID)) * 100).toFixed(2)
+  const pct = ((soldPixels / (GRID * GRID)) * 100).toFixed(4)
+  const isPanning = zoom > 1.5
 
   return (
-    <div className="w-full">
-      <div className="flex items-center justify-between mb-3 text-sm">
-        <span className="text-gray-400">
-          <span className="text-white font-bold">{soldPixels.toLocaleString()}</span> vendidos
-          &nbsp;·&nbsp;
-          <span className="text-green-400 font-bold">{(GRID * GRID - soldPixels).toLocaleString()}</span> disponibles
+    <div className="w-full select-none">
+      {/* Stats row */}
+      <div className="flex items-center justify-between mb-3">
+        <span className="text-zinc-500 text-sm">
+          <span className="text-white font-medium">{soldPixels.toLocaleString()}</span> vendidos
+          {' · '}
+          <span className="text-emerald-400 font-medium">{(GRID * GRID - soldPixels).toLocaleString()}</span> disponibles
         </span>
-        <span className="text-brand-500 font-bold">{pct}% ocupado</span>
+        <span className="text-zinc-600 text-xs tabular-nums">{pct}% ocupado</span>
       </div>
 
-      <div className="w-full bg-gray-800 rounded-full h-1.5 mb-4">
-        <div className="h-1.5 rounded-full bg-gradient-to-r from-brand-500 to-orange-400 transition-all"
-             style={{ width: `${Math.max(0.1, parseFloat(pct))}%` }} />
+      {/* Progress */}
+      <div className="h-px bg-zinc-900 rounded-full mb-5 overflow-hidden">
+        <div className="h-full bg-orange-500 transition-all duration-700" style={{ width: `${Math.max(0.05, parseFloat(pct))}%` }} />
       </div>
 
-      <div className="relative rounded-xl overflow-hidden border border-white/10 shadow-2xl">
+      {/* Canvas wrapper */}
+      <div ref={wrapRef} className="relative w-full rounded-xl overflow-hidden border border-zinc-900 bg-[#09090b]">
         <canvas
           ref={canvasRef}
-          width={GRID}
-          height={GRID}
-          style={{ width: '100%', imageRendering: 'pixelated', display: 'block',
-                   cursor: isDragging ? 'crosshair' : 'crosshair' }}
-          onMouseDown={handleMouseDown}
-          onMouseMove={handleMouseMove}
-          onMouseUp={handleMouseUp}
-          onMouseLeave={handleMouseLeave}
+          style={{ display: 'block', width: '100%', imageRendering: 'pixelated', cursor: isPanning ? 'grab' : 'crosshair' }}
+          onMouseDown={onMouseDown}
+          onMouseMove={onMouseMove}
+          onMouseUp={onMouseUp}
+          onMouseLeave={onMouseLeave}
         />
+
+        {/* Zoom controls */}
+        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-zinc-950/90 border border-zinc-800 rounded-lg p-1 backdrop-blur">
+          <button onClick={zoomOut} disabled={zoom <= 1}
+            className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg leading-none">
+            −
+          </button>
+          <button onClick={resetZoom}
+            className="px-2 h-7 text-xs font-mono text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-all tabular-nums min-w-[42px] text-center">
+            {zoom < 10 ? zoom.toFixed(1) : Math.round(zoom)}×
+          </button>
+          <button onClick={zoomIn} disabled={zoom >= MAX_ZOOM}
+            className="w-7 h-7 flex items-center justify-center text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-all disabled:opacity-30 disabled:cursor-not-allowed text-lg leading-none">
+            +
+          </button>
+        </div>
+
+        {/* Mode hint */}
+        <div className="absolute bottom-3 left-3 text-zinc-700 text-xs pointer-events-none">
+          {isPanning ? 'arrastra para mover · clic para comprar' : 'arrastra para seleccionar · scroll para zoom'}
+        </div>
       </div>
 
-      <p className="text-center text-gray-500 text-xs mt-3">
-        Arrastra para seleccionar los píxeles que quieras · S/1 por píxel
-      </p>
-
+      {/* Tooltip */}
       {tooltip && (
-        <div className="fixed z-50 pointer-events-none bg-gray-900 border border-white/15 rounded-xl p-3 shadow-2xl text-sm"
-             style={{ left: tooltip.clientX + 14, top: tooltip.clientY - 10, maxWidth: 200 }}>
-          <div className="font-bold text-white">{tooltip.purchase.business_name}</div>
-          {tooltip.purchase.destination_link && <div className="text-brand-500 text-xs mt-0.5">Clic para visitar →</div>}
+        <div className="fixed z-50 pointer-events-none bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2.5 shadow-2xl text-sm"
+             style={{ left: tooltip.clientX + 14, top: tooltip.clientY - 8, maxWidth: 200 }}>
+          <p className="font-semibold text-white text-xs">{tooltip.purchase.business_name}</p>
+          {tooltip.purchase.destination_link && <p className="text-orange-500 text-xs mt-0.5">clic para visitar →</p>}
         </div>
       )}
     </div>
