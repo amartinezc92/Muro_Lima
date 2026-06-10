@@ -4,20 +4,9 @@ import { uploadSpaceImage } from '../services/storage'
 
 const CATEGORIES = ['Restaurante', 'Boutique', 'Salud', 'Educación', 'Tecnología', 'Arte', 'Servicios', 'Otro']
 
-// Block sizes: width x height in pixels (min 10x10)
-const BLOCKS = [
-  { label: '10×10',   w: 10,  h: 10,  desc: 'Micro' },
-  { label: '20×20',   w: 20,  h: 20,  desc: 'Pequeño' },
-  { label: '50×20',   w: 50,  h: 20,  desc: 'Banner' },
-  { label: '50×50',   w: 50,  h: 50,  desc: 'Cuadrado' },
-  { label: '100×50',  w: 100, h: 50,  desc: 'Destacado' },
-  { label: '100×100', w: 100, h: 100, desc: 'Premium' },
-  { label: '200×100', w: 200, h: 100, desc: 'Grande' },
-]
-
 export default function BuyModal({ position, onClose, onSuccess }) {
   const [step, setStep]   = useState(0)
-  const [block, setBlock] = useState(BLOCKS[3])
+  const [pixelCount, setPixelCount] = useState(100)
   const [form, setForm]   = useState({ businessName: '', email: '', whatsapp: '', category: '', description: '', destinationLink: '' })
   const [imageFile, setImageFile]     = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
@@ -28,10 +17,18 @@ export default function BuyModal({ position, onClose, onSuccess }) {
 
   if (!position) return null
 
-  const pixels = block.w * block.h
+  // Derive w/h as a square (best fit)
+  const side = Math.max(1, Math.round(Math.sqrt(pixelCount)))
+  const pw   = side
+  const ph   = Math.max(1, Math.round(pixelCount / side))
+  const pixels = pw * ph
   const price  = pixels  // S/1 per pixel
 
-  function validate0() { return {} }
+  function validate0() {
+    if (!pixelCount || pixelCount < 1) return { pixels: 'Mínimo 1 píxel' }
+    if (pixelCount > 1_000_000) return { pixels: 'Máximo 1,000,000 píxeles' }
+    return {}
+  }
   function validate1() {
     const e = {}
     if (!form.businessName.trim()) e.businessName = 'Requerido'
@@ -78,8 +75,8 @@ export default function BuyModal({ position, onClose, onSuccess }) {
           pixel_count:      pixels,
           px:               position.x,
           py:               position.y,
-          pw:               block.w,
-          ph:               block.h,
+          pw,
+          ph,
           amount:           price,
           currency:         'PEN',
           status:           'pending',
@@ -157,29 +154,50 @@ export default function BuyModal({ position, onClose, onSuccess }) {
             ))}
           </div>
 
-          {/* Step 0: block size */}
+          {/* Step 0: pixel count */}
           {step === 0 && (
-            <div className="space-y-2 animate-fade-in">
-              <p className="text-gray-500 text-xs mb-3">Elige el tamaño de tu espacio:</p>
-              {BLOCKS.map(b => (
-                <button key={b.label} onClick={() => setBlock(b)}
-                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
-                          block.label === b.label
-                            ? 'border-brand-500 bg-brand-500/10'
-                            : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                        }`}>
-                  <div className="flex items-center gap-3">
-                    {/* Mini preview */}
-                    <div className="bg-brand-500/20 border border-brand-500/40 rounded flex-shrink-0"
-                         style={{ width: Math.min(b.w / 2, 48) + 'px', height: Math.min(b.h / 2, 32) + 'px' }} />
-                    <div className="text-left">
-                      <div className="text-white font-bold text-sm">{b.label} px</div>
-                      <div className="text-gray-500 text-xs">{b.desc} · {(b.w * b.h).toLocaleString()} píxeles</div>
-                    </div>
-                  </div>
-                  <div className="text-brand-500 font-extrabold">S/{(b.w * b.h).toLocaleString()}</div>
-                </button>
-              ))}
+            <div className="animate-fade-in space-y-5">
+              <div>
+                <label className="block text-gray-400 text-xs font-medium mb-2">¿Cuántos píxeles quieres comprar?</label>
+                <input
+                  type="number"
+                  min="1"
+                  max="1000000"
+                  value={pixelCount}
+                  onChange={e => setPixelCount(Math.max(1, Math.min(1_000_000, parseInt(e.target.value) || 1)))}
+                  className="w-full bg-gray-800 border border-gray-700 focus:border-brand-500 rounded-xl px-4 py-3 text-white text-2xl font-bold text-center focus:outline-none transition-colors"
+                />
+                {errors.pixels && <p className="text-red-400 text-xs mt-1">{errors.pixels}</p>}
+              </div>
+
+              {/* Quick picks */}
+              <div>
+                <p className="text-gray-600 text-xs mb-2">Selección rápida:</p>
+                <div className="grid grid-cols-4 gap-2">
+                  {[1, 10, 100, 500, 1000, 5000, 10000, 50000].map(n => (
+                    <button key={n} onClick={() => setPixelCount(n)}
+                            className={`py-2 rounded-lg text-xs font-bold border transition-all ${
+                              pixelCount === n
+                                ? 'border-brand-500 bg-brand-500/20 text-brand-400'
+                                : 'border-gray-700 text-gray-400 hover:border-gray-500'
+                            }`}>
+                      {n.toLocaleString()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Price display */}
+              <div className="bg-gray-800/60 rounded-xl p-4 flex items-center justify-between">
+                <div>
+                  <div className="text-gray-400 text-xs">Área aproximada</div>
+                  <div className="text-white font-semibold">{pw}×{ph} píxeles</div>
+                </div>
+                <div className="text-right">
+                  <div className="text-gray-400 text-xs">Total a pagar</div>
+                  <div className="text-brand-500 font-extrabold text-2xl">S/{pixels.toLocaleString()}</div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -237,7 +255,7 @@ export default function BuyModal({ position, onClose, onSuccess }) {
             <div className="animate-fade-in">
               <div className="bg-gray-800/50 rounded-xl p-4 mb-5 space-y-2">
                 <Row label="Posición" value={`(${position.x}, ${position.y})`} />
-                <Row label="Tamaño" value={`${block.label} px = ${pixels.toLocaleString()} píxeles`} />
+                <Row label="Píxeles" value={`${pixels.toLocaleString()} px (${pw}×${ph})`} />
                 <Row label="Negocio" value={form.businessName} />
                 <Row label="Email" value={form.email} />
                 {imagePreview && (
@@ -274,7 +292,7 @@ export default function BuyModal({ position, onClose, onSuccess }) {
                 </button>
               )}
               <button onClick={next} className="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl transition-colors">
-                {step === 1 ? 'Revisar →' : 'Continuar →'}
+                {step === 0 ? `Continuar con S/${pixels.toLocaleString()} →` : 'Revisar →'}
               </button>
             </div>
           )}

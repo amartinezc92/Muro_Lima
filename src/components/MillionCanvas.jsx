@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, useCallback } from 'react'
 
 const GRID = 1000       // 1000x1000 pixels
-const MIN_BLOCK = 10    // minimum 10x10 = 100px
 
 export default function MillionCanvas({ purchases = [], onSelect }) {
   const canvasRef   = useRef(null)
@@ -99,13 +98,8 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
     return { x: Math.max(0, Math.min(GRID - 1, x)), y: Math.max(0, Math.min(GRID - 1, y)) }
   }
 
-  function snapToGrid(x, y, blockSize = MIN_BLOCK) {
-    return {
-      x: Math.floor(x / blockSize) * blockSize,
-      y: Math.floor(y / blockSize) * blockSize,
-      w: blockSize,
-      h: blockSize,
-    }
+  function snapToGrid(x, y) {
+    return { x, y, w: 1, h: 1 }
   }
 
   function getOwnerAt(x, y) {
@@ -194,7 +188,7 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
       )}
 
       <p className="text-center text-gray-600 text-xs mt-3">
-        Mínimo 10×10 píxeles (S/100) · Haz clic en cualquier espacio libre
+        Desde 1 píxel (S/1) · Haz clic en cualquier espacio libre para comprar
       </p>
     </div>
   )
