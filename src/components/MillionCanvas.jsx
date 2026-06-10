@@ -85,7 +85,8 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
           imagesRef.current[p.image_url] = 'loading'
           const im = new Image()
           im.crossOrigin = 'anonymous'
-          im.onload = () => { imagesRef.current[p.image_url] = im; draw() }
+          im.onload  = () => { imagesRef.current[p.image_url] = im;   draw() }
+          im.onerror = () => { imagesRef.current[p.image_url] = null; draw() }
           im.src = p.image_url
         }
       }
