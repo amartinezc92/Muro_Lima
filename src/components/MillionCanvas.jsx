@@ -44,27 +44,26 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
     ctx.scale(z, z)
     ctx.translate(-panX, -panY)
 
-    // Background
-    ctx.fillStyle = '#09090b'
+    // Background — visible dark slate so the grid reads clearly
+    ctx.fillStyle = '#0f172a'
     ctx.fillRect(panX, panY, W / z, H / z)
 
-    // Grid (only when zoomed enough to be visible)
-    if (z >= 4) {
-      ctx.strokeStyle = `rgba(255,255,255,${Math.min(0.08, (z - 4) * 0.015)})`
+    // Grid lines — always visible at base zoom, get finer as you zoom
+    if (z >= 6) {
+      // Per-pixel grid
+      ctx.strokeStyle = 'rgba(255,255,255,0.12)'
       ctx.lineWidth = 0.5 / z
-      const step = 1
-      const x0 = Math.floor(panX / step) * step
-      const y0 = Math.floor(panY / step) * step
-      const x1 = panX + W / z
-      const y1 = panY + H / z
-      for (let x = x0; x <= x1; x += step) {
-        ctx.beginPath(); ctx.moveTo(x, panY); ctx.lineTo(x, y1); ctx.stroke()
+      const x0 = Math.floor(panX), y0 = Math.floor(panY)
+      const x1 = panX + W / z,    y1 = panY + H / z
+      for (let x = x0; x <= x1; x++) {
+        ctx.beginPath(); ctx.moveTo(x, y0); ctx.lineTo(x, y1); ctx.stroke()
       }
-      for (let y = y0; y <= y1; y += step) {
-        ctx.beginPath(); ctx.moveTo(panX, y); ctx.lineTo(x1, y); ctx.stroke()
+      for (let y = y0; y <= y1; y++) {
+        ctx.beginPath(); ctx.moveTo(x0, y); ctx.lineTo(x1, y); ctx.stroke()
       }
-    } else if (z >= 1.5) {
-      ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+    } else {
+      // 10-pixel grid — always on
+      ctx.strokeStyle = 'rgba(255,255,255,0.07)'
       ctx.lineWidth = 0.5 / z
       for (let x = 0; x <= GRID; x += 10) {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GRID); ctx.stroke()
