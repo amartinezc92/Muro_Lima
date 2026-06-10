@@ -2,49 +2,20 @@ import { useState, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { uploadSpaceImage } from '../services/storage'
 
-const CATEGORIES = ['Restaurante', 'Boutique', 'Salud', 'Educación', 'Tecnología', 'Arte', 'Servicios', 'Otro']
-
-export default function BuyModal({ position, onClose, onSuccess }) {
-  const [step, setStep]   = useState(0)
-  const [pixelCount, setPixelCount] = useState(100)
-  const [form, setForm]   = useState({ businessName: '', email: '', whatsapp: '', category: '', description: '', destinationLink: '' })
-  const [imageFile, setImageFile]     = useState(null)
+export default function BuyModal({ selection, onClose, onSuccess }) {
+  const [email, setEmail]         = useState('')
+  const [url, setUrl]             = useState('')
+  const [imageFile, setImageFile] = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
-  const [errors, setErrors] = useState({})
-  const [loading, setLoading]   = useState(false)
+  const [errors, setErrors]       = useState({})
+  const [loading, setLoading]     = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
   const fileRef = useRef()
 
-  if (!position) return null
+  if (!selection) return null
 
-  // Derive w/h as a square (best fit)
-  const side = Math.max(1, Math.round(Math.sqrt(pixelCount)))
-  const pw   = side
-  const ph   = Math.max(1, Math.round(pixelCount / side))
-  const pixels = pw * ph
-  const price  = pixels  // S/1 per pixel
-
-  function validate0() {
-    if (!pixelCount || pixelCount < 1) return { pixels: 'Mínimo 1 píxel' }
-    if (pixelCount > 1_000_000) return { pixels: 'Máximo 1,000,000 píxeles' }
-    return {}
-  }
-  function validate1() {
-    const e = {}
-    if (!form.businessName.trim()) e.businessName = 'Requerido'
-    if (!form.email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) e.email = 'Email inválido'
-    if (!form.whatsapp.match(/^\+?[0-9]{9,15}$/)) e.whatsapp = 'Ej: 999999999'
-    if (!form.category) e.category = 'Categoría requerida'
-    if (!imageFile) e.image = 'Sube tu logo o imagen'
-    return e
-  }
-
-  function next() {
-    const errs = step === 0 ? validate0() : step === 1 ? validate1() : {}
-    if (Object.keys(errs).length) { setErrors(errs); return }
-    setErrors({})
-    setStep(s => s + 1)
-  }
+  const { x, y, w, h, pixels } = selection
+  const price = pixels
 
   function handleImage(e) {
     const file = e.target.files?.[0]
@@ -55,7 +26,17 @@ export default function BuyModal({ position, onClose, onSuccess }) {
     setErrors(v => { const c = { ...v }; delete c.image; return c })
   }
 
+  function validate() {
+    const e = {}
+    if (!email.match(/^[^\s@]+@[^\s@]+\.[^\s@]+$/)) e.email = 'Email inválido'
+    if (!imageFile) e.image = 'Sube tu imagen o logo'
+    return e
+  }
+
   async function handlePay() {
+    const errs = validate()
+    if (Object.keys(errs).length) { setErrors(errs); return }
+
     setLoading(true)
     try {
       setStatusMsg('Subiendo imagen...')
@@ -65,21 +46,15 @@ export default function BuyModal({ position, onClose, onSuccess }) {
       const { data: purchase, error: pErr } = await supabase
         .from('purchases')
         .insert({
-          email:            form.email,
-          whatsapp:         form.whatsapp,
-          business_name:    form.businessName,
-          category:         form.category,
+          email,
+          business_name:    url || 'Sin nombre',
+          destination_link: url,
           image_url:        imageUrl,
-          destination_link: form.destinationLink,
-          description:      form.description,
           pixel_count:      pixels,
-          px:               position.x,
-          py:               position.y,
-          pw,
-          ph,
-          amount:           price,
-          currency:         'PEN',
-          status:           'pending',
+          px: x, py: y, pw: w, ph: h,
+          amount:   price,
+          currency: 'PEN',
+          status:   'pending',
         })
         .select()
         .single()
@@ -95,17 +70,12 @@ export default function BuyModal({ position, onClose, onSuccess }) {
             Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`,
             'Content-Type': 'application/json',
           },
-          body: JSON.stringify({
-            email:      form.email,
-            purchaseId: purchase.id,
-            pixelCount: pixels,
-            price,
-          }),
+          body: JSON.stringify({ email, purchaseId: purchase.id, pixelCount: pixels, price }),
         }
       )
-      const { url, error: stripeErr } = await res.json()
+      const { url: checkoutUrl, error: stripeErr } = await res.json()
       if (stripeErr) throw new Error(stripeErr)
-      window.location.href = url
+      window.location.href = checkoutUrl
     } catch (err) {
       setErrors({ submit: err.message })
       setLoading(false)
@@ -113,205 +83,76 @@ export default function BuyModal({ position, onClose, onSuccess }) {
     }
   }
 
-  const STEPS = ['Elige tamaño', 'Tu negocio', 'Confirmar']
-  const ic = err => `w-full bg-gray-800 border rounded-xl px-3 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none transition-colors ${err ? 'border-red-500/50' : 'border-gray-700 focus:border-brand-500'}`
-
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/80 backdrop-blur-sm p-4 pt-8"
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4"
          onClick={e => e.target === e.currentTarget && onClose()}>
-      <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-md shadow-2xl animate-fade-in mb-8">
+      <div className="bg-gray-900 border border-white/10 rounded-2xl w-full max-w-sm shadow-2xl animate-fade-in">
 
         {/* Header */}
-        <div className="rounded-t-2xl p-5 border-b border-white/10"
-             style={{ background: 'linear-gradient(135deg,#f9731622,#f9731608)', borderTop: '3px solid #f97316' }}>
+        <div className="p-5 border-b border-white/10"
+             style={{ background: 'linear-gradient(135deg,#f9731618,#f9731605)', borderTop: '3px solid #f97316', borderRadius: '1rem 1rem 0 0' }}>
           <div className="flex items-start justify-between">
             <div>
-              <div className="text-xs font-semibold uppercase tracking-widest mb-1 text-brand-500">
-                Posición ({position.x}, {position.y})
-              </div>
-              <h2 className="text-lg font-bold text-white">Reserva tu espacio en el muro</h2>
-              <p className="text-gray-500 text-xs mt-1">S/1 por píxel · pago único · visible para siempre</p>
+              <div className="text-brand-500 text-xs font-bold uppercase tracking-widest mb-1">Tu espacio en el muro</div>
+              <div className="text-white font-extrabold text-xl">{pixels.toLocaleString()} píxeles</div>
+              <div className="text-gray-400 text-sm">{w}×{h} px · posición ({x}, {y})</div>
             </div>
-            <button onClick={onClose} className="text-gray-500 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5">✕</button>
+            <div className="text-right">
+              <div className="text-brand-500 font-extrabold text-2xl">S/{price.toLocaleString()}</div>
+              <div className="text-gray-600 text-xs">pago único</div>
+            </div>
           </div>
+          <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5">✕</button>
         </div>
 
-        <div className="p-5">
-          {/* Steps */}
-          <div className="flex items-center justify-center gap-3 mb-5">
-            {STEPS.map((label, i) => (
-              <div key={label} className="flex items-center gap-2">
-                <div className={`flex items-center gap-1.5 text-xs ${i <= step ? 'text-white' : 'text-gray-600'}`}>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold border transition-colors ${
-                    i < step  ? 'bg-brand-500 border-brand-500 text-white' :
-                    i === step ? 'border-brand-500 text-brand-500' :
-                    'border-gray-700 text-gray-600'
-                  }`}>{i < step ? '✓' : i + 1}</div>
-                  <span className="hidden sm:block">{label}</span>
-                </div>
-                {i < STEPS.length - 1 && <div className={`w-6 h-px ${i < step ? 'bg-brand-500' : 'bg-gray-700'}`} />}
-              </div>
-            ))}
+        <div className="p-5 space-y-4">
+
+          {/* Image upload */}
+          <div>
+            <label className="block text-gray-400 text-xs font-medium mb-1.5">Tu imagen / logo *</label>
+            <div onClick={() => fileRef.current?.click()}
+                 className={`border-2 border-dashed rounded-xl p-5 text-center cursor-pointer transition-colors ${errors.image ? 'border-red-500/50' : 'border-gray-700 hover:border-brand-500/50'}`}>
+              {imagePreview
+                ? <img src={imagePreview} alt="" className="h-24 mx-auto rounded-lg object-contain" />
+                : <>
+                    <div className="text-3xl mb-2">🖼️</div>
+                    <p className="text-gray-400 text-sm font-medium">Clic para subir JPG/PNG</p>
+                    <p className="text-gray-600 text-xs mt-1">Máximo 5 MB</p>
+                  </>}
+              <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
+            </div>
+            {errors.image && <p className="text-red-400 text-xs mt-1">{errors.image}</p>}
           </div>
 
-          {/* Step 0: pixel count */}
-          {step === 0 && (
-            <div className="animate-fade-in space-y-5">
-              <div>
-                <label className="block text-gray-400 text-xs font-medium mb-2">¿Cuántos píxeles quieres comprar?</label>
-                <input
-                  type="number"
-                  min="1"
-                  max="1000000"
-                  value={pixelCount}
-                  onChange={e => setPixelCount(Math.max(1, Math.min(1_000_000, parseInt(e.target.value) || 1)))}
-                  className="w-full bg-gray-800 border border-gray-700 focus:border-brand-500 rounded-xl px-4 py-3 text-white text-2xl font-bold text-center focus:outline-none transition-colors"
-                />
-                {errors.pixels && <p className="text-red-400 text-xs mt-1">{errors.pixels}</p>}
-              </div>
+          {/* URL */}
+          <div>
+            <label className="block text-gray-400 text-xs font-medium mb-1.5">URL de destino (opcional)</label>
+            <input type="url" value={url} placeholder="https://tu-web.com"
+                   onChange={e => setUrl(e.target.value)}
+                   className="w-full bg-gray-800 border border-gray-700 focus:border-brand-500 rounded-xl px-3 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none transition-colors" />
+          </div>
 
-              {/* Quick picks */}
-              <div>
-                <p className="text-gray-600 text-xs mb-2">Selección rápida:</p>
-                <div className="grid grid-cols-4 gap-2">
-                  {[1, 10, 100, 500, 1000, 5000, 10000, 50000].map(n => (
-                    <button key={n} onClick={() => setPixelCount(n)}
-                            className={`py-2 rounded-lg text-xs font-bold border transition-all ${
-                              pixelCount === n
-                                ? 'border-brand-500 bg-brand-500/20 text-brand-400'
-                                : 'border-gray-700 text-gray-400 hover:border-gray-500'
-                            }`}>
-                      {n.toLocaleString()}
-                    </button>
-                  ))}
-                </div>
-              </div>
+          {/* Email */}
+          <div>
+            <label className="block text-gray-400 text-xs font-medium mb-1.5">Tu email (para el recibo) *</label>
+            <input type="email" value={email} placeholder="tu@email.com"
+                   onChange={e => setEmail(e.target.value)}
+                   className={`w-full bg-gray-800 border rounded-xl px-3 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none transition-colors ${errors.email ? 'border-red-500/50' : 'border-gray-700 focus:border-brand-500'}`} />
+            {errors.email && <p className="text-red-400 text-xs mt-1">{errors.email}</p>}
+          </div>
 
-              {/* Price display */}
-              <div className="bg-gray-800/60 rounded-xl p-4 flex items-center justify-between">
-                <div>
-                  <div className="text-gray-400 text-xs">Área aproximada</div>
-                  <div className="text-white font-semibold">{pw}×{ph} píxeles</div>
-                </div>
-                <div className="text-right">
-                  <div className="text-gray-400 text-xs">Total a pagar</div>
-                  <div className="text-brand-500 font-extrabold text-2xl">S/{pixels.toLocaleString()}</div>
-                </div>
-              </div>
-            </div>
+          {errors.submit && (
+            <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-3 text-red-400 text-sm">{errors.submit}</div>
           )}
 
-          {/* Step 1: business form */}
-          {step === 1 && (
-            <div className="space-y-3 animate-fade-in">
-              <Field label="Nombre del negocio *" error={errors.businessName}>
-                <input type="text" value={form.businessName} placeholder="Ej: Café Barranco"
-                       onChange={e => setForm(v => ({ ...v, businessName: e.target.value }))}
-                       className={ic(errors.businessName)} />
-              </Field>
-              <div className="grid grid-cols-2 gap-3">
-                <Field label="Email *" error={errors.email}>
-                  <input type="email" value={form.email} placeholder="tu@email.com"
-                         onChange={e => setForm(v => ({ ...v, email: e.target.value }))}
-                         className={ic(errors.email)} />
-                </Field>
-                <Field label="WhatsApp *" error={errors.whatsapp}>
-                  <input type="tel" value={form.whatsapp} placeholder="999999999"
-                         onChange={e => setForm(v => ({ ...v, whatsapp: e.target.value }))}
-                         className={ic(errors.whatsapp)} />
-                </Field>
-              </div>
-              <Field label="Categoría *" error={errors.category}>
-                <select value={form.category} onChange={e => setForm(v => ({ ...v, category: e.target.value }))}
-                        className={ic(errors.category)}>
-                  <option value="" className="bg-gray-900">Selecciona...</option>
-                  {CATEGORIES.map(c => <option key={c} value={c} className="bg-gray-900">{c}</option>)}
-                </select>
-              </Field>
-              <Field label="Logo / Imagen *" error={errors.image}>
-                <div onClick={() => fileRef.current?.click()}
-                     className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${errors.image ? 'border-red-500/50' : 'border-gray-700 hover:border-brand-500/50'}`}>
-                  {imagePreview
-                    ? <img src={imagePreview} alt="" className="h-20 mx-auto rounded-lg object-contain" />
-                    : <><div className="text-2xl mb-1">📸</div><p className="text-gray-400 text-sm">Clic para subir logo (máx 5MB)</p></>}
-                  <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
-                </div>
-              </Field>
-              <Field label="Descripción (opcional)">
-                <input type="text" value={form.description} placeholder="Ej: El mejor café de Lima"
-                       onChange={e => setForm(v => ({ ...v, description: e.target.value.slice(0, 50) }))}
-                       className={ic()} />
-              </Field>
-              <Field label="Link de destino (opcional)">
-                <input type="text" value={form.destinationLink} placeholder="https://tu-web.com"
-                       onChange={e => setForm(v => ({ ...v, destinationLink: e.target.value }))}
-                       className={ic()} />
-              </Field>
-            </div>
-          )}
+          <button onClick={handlePay} disabled={loading}
+                  className="w-full bg-brand-500 hover:bg-brand-600 disabled:opacity-60 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-lg shadow-brand-500/20 mt-2">
+            {loading ? (statusMsg || 'Procesando...') : `Pagar S/${price.toLocaleString()} →`}
+          </button>
 
-          {/* Step 2: confirm */}
-          {step === 2 && (
-            <div className="animate-fade-in">
-              <div className="bg-gray-800/50 rounded-xl p-4 mb-5 space-y-2">
-                <Row label="Posición" value={`(${position.x}, ${position.y})`} />
-                <Row label="Píxeles" value={`${pixels.toLocaleString()} px (${pw}×${ph})`} />
-                <Row label="Negocio" value={form.businessName} />
-                <Row label="Email" value={form.email} />
-                {imagePreview && (
-                  <div className="flex justify-between items-center">
-                    <span className="text-gray-500 text-sm">Imagen</span>
-                    <img src={imagePreview} alt="" className="h-10 w-16 rounded-lg object-contain bg-gray-700" />
-                  </div>
-                )}
-                <div className="border-t border-white/10 pt-3 flex justify-between items-center">
-                  <span className="text-white font-semibold">Total</span>
-                  <div className="text-right">
-                    <div className="font-extrabold text-xl text-brand-500">S/{price.toLocaleString()}</div>
-                    <div className="text-gray-600 text-xs">{pixels.toLocaleString()} px × S/1</div>
-                  </div>
-                </div>
-              </div>
-              {errors.submit && (
-                <div className="bg-red-900/30 border border-red-500/30 rounded-xl p-3 mb-4 text-red-400 text-sm">{errors.submit}</div>
-              )}
-              <button onClick={handlePay} disabled={loading}
-                      className="w-full bg-brand-500 hover:bg-brand-600 text-white font-bold py-4 rounded-xl text-lg transition-all shadow-lg disabled:opacity-60">
-                {loading ? (statusMsg || 'Procesando...') : `Pagar S/${price.toLocaleString()} →`}
-              </button>
-              <p className="text-gray-600 text-xs text-center mt-3">Pago seguro via Stripe · Tu logo aparece en el muro</p>
-            </div>
-          )}
-
-          {step < 2 && (
-            <div className="flex gap-3 mt-5">
-              {step > 0 && (
-                <button onClick={() => setStep(s => s - 1)}
-                        className="flex-1 border border-gray-700 text-gray-400 hover:text-white font-medium py-3 rounded-xl transition-colors">
-                  ← Atrás
-                </button>
-              )}
-              <button onClick={next} className="flex-1 bg-brand-500 hover:bg-brand-600 text-white font-bold py-3 rounded-xl transition-colors">
-                {step === 0 ? `Continuar con S/${pixels.toLocaleString()} →` : 'Revisar →'}
-              </button>
-            </div>
-          )}
+          <p className="text-gray-600 text-xs text-center">Pago seguro via Stripe · Tu imagen aparece en el muro</p>
         </div>
       </div>
     </div>
   )
 }
-
-const Field = ({ label, error, children }) => (
-  <div>
-    <label className="block text-gray-400 text-xs font-medium mb-1">{label}</label>
-    {children}
-    {error && <p className="text-red-400 text-xs mt-1">{error}</p>}
-  </div>
-)
-const Row = ({ label, value }) => (
-  <div className="flex justify-between items-start gap-4">
-    <span className="text-gray-500 text-sm shrink-0">{label}</span>
-    <span className="text-gray-300 text-sm text-right">{value}</span>
-  </div>
-)

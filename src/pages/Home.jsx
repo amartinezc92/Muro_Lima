@@ -10,7 +10,7 @@ const TOTAL = 1_000_000
 
 export default function Home() {
   const { purchases, loading, soldPixels, reload } = usePurchases()
-  const [position, setPosition] = useState(null)
+  const [selection, setSelection] = useState(null)
 
   const pct = ((soldPixels / TOTAL) * 100).toFixed(2)
 
@@ -41,19 +41,19 @@ export default function Home() {
           ) : (
             <MillionCanvas
               purchases={purchases}
-              onSelect={pos => setPosition(pos)}
+              onSelect={sel => setSelection(sel)}
             />
           )}
 
           <div className="mt-8 text-center">
             <button
-              onClick={() => setPosition({ x: 0, y: 0 })}
+              onClick={() => setSelection({ x: 0, y: 0, w: 10, h: 10, pixels: 100 })}
               className="bg-brand-500 hover:bg-brand-600 text-white font-bold px-8 py-4 rounded-xl text-lg transition-all shadow-lg shadow-brand-500/25"
             >
               Comprar mi espacio →
             </button>
             <p className="text-gray-600 text-xs mt-3">
-              Mínimo 10×10 px (S/100) · Pago único · Logo visible para siempre
+              Arrastra en el muro para elegir tu espacio · S/1 por píxel
             </p>
           </div>
         </div>
@@ -62,11 +62,11 @@ export default function Home() {
       <FAQ />
       <Footer />
 
-      {position && (
+      {selection && (
         <BuyModal
-          position={position}
-          onClose={() => setPosition(null)}
-          onSuccess={() => { setPosition(null); reload() }}
+          selection={selection}
+          onClose={() => setSelection(null)}
+          onSuccess={() => { setSelection(null); reload() }}
         />
       )}
     </>
