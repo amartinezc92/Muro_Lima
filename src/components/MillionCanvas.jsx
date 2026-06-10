@@ -269,20 +269,6 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
 
   return (
     <div className="w-full select-none">
-      {/* Stats row */}
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-zinc-500 text-sm">
-          <span className="text-white font-medium">{soldPixels.toLocaleString()}</span> vendidos
-          {' · '}
-          <span className="text-emerald-400 font-medium">{(GRID * GRID - soldPixels).toLocaleString()}</span> disponibles
-        </span>
-        <span className="text-zinc-600 text-xs tabular-nums">{pct}% ocupado</span>
-      </div>
-
-      {/* Progress */}
-      <div className="h-px bg-zinc-900 rounded-full mb-5 overflow-hidden">
-        <div className="h-full bg-orange-500 transition-all duration-700" style={{ width: `${Math.max(0.05, parseFloat(pct))}%` }} />
-      </div>
 
       {/* Canvas wrapper */}
       <div ref={wrapRef} className="relative w-full rounded-xl overflow-hidden border border-zinc-900 bg-[#09090b]">
