@@ -52,14 +52,6 @@ function getSlug(name) {
     .replace(/\s+/g, '-')
 }
 
-// Overpass query using "out geom" — returns geometry inline, no assembly needed
-const OVERPASS_QUERY = `[out:json][timeout:90];
-area["name"="Lima"]["admin_level"="4"]["boundary"="administrative"]->.lima;
-(
-  relation["boundary"="administrative"]["admin_level"="8"](area.lima);
-);
-out geom qt;`
-
 // Convert Overpass "out geom" response → GeoJSON FeatureCollection
 function overpassGeomToGeoJSON(data) {
   const features = []
@@ -168,10 +160,8 @@ export default function LimaLeafletMap({ spaceData = {}, onSelectDistrict }) {
 
     leafletRef.current = map
 
-    // Fetch via GET — Overpass supports CORS on GET requests
-    const url = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(OVERPASS_QUERY)
-
-    fetch(url)
+    // Load static GeoJSON from public folder — no CORS issues
+    fetch('/lima-districts.json')
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -182,7 +172,7 @@ export default function LimaLeafletMap({ spaceData = {}, onSelectDistrict }) {
         setLoading(false)
       })
       .catch(err => {
-        console.error('Overpass error:', err)
+        console.error('Map error:', err)
         setError('No se pudo cargar el mapa. Intenta recargar la página.')
         setLoading(false)
       })

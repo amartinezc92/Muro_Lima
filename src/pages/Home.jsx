@@ -62,8 +62,10 @@ export default function Home() {
                       <button
                         key={s.district_slug}
                         onClick={() => {
-                          const def = DISTRICTS.find(d => d.slug === s.district_slug)
-                          if (def) handleSelectDistrict(def, s)
+                          handleSelectDistrict(
+                            { name: s.district, slug: s.district_slug, color: '#f97316', price: s.base_price_per_px },
+                            s
+                          )
                         }}
                         className="w-full text-left bg-gray-900 hover:bg-gray-800 border border-white/5 hover:border-white/15 rounded-xl p-3 transition-all group"
                       >
