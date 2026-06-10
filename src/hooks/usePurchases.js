@@ -8,7 +8,7 @@ export function usePurchases() {
   async function load() {
     const { data } = await supabase
       .from('purchases')
-      .select('id, pixel_start, pixel_count, business_name, image_url, color, status, destination_link')
+      .select('id, px, py, pw, ph, pixel_count, business_name, image_url, color, status, destination_link')
       .eq('status', 'completed')
     setPurchases(data ?? [])
     setLoading(false)
@@ -16,7 +16,7 @@ export function usePurchases() {
 
   useEffect(() => { load() }, [])
 
-  const soldPixels = purchases.reduce((s, p) => s + (p.pixel_count || 0), 0)
+  const soldPixels = purchases.reduce((s, p) => s + (p.pw ?? 0) * (p.ph ?? 0), 0)
 
   return { purchases, loading, soldPixels, reload: load }
 }

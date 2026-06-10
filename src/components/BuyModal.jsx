@@ -3,34 +3,35 @@ import { supabase } from '../lib/supabase'
 import { uploadSpaceImage } from '../services/storage'
 
 const CATEGORIES = ['Restaurante', 'Boutique', 'Salud', 'Educación', 'Tecnología', 'Arte', 'Servicios', 'Otro']
-const PACKS = [
-  { label: '1 px',    pixels: 1,    desc: 'Prueba' },
-  { label: '5 px',    pixels: 5,    desc: 'Pequeño' },
-  { label: '10 px',   pixels: 10,   desc: 'Básico' },
-  { label: '50 px',   pixels: 50,   desc: 'Visible' },
-  { label: '100 px',  pixels: 100,  desc: 'Popular' },
-  { label: '500 px',  pixels: 500,  desc: 'Destacado' },
-  { label: '1000 px', pixels: 1000, desc: 'Todo el muro' },
+
+// Block sizes: width x height in pixels (min 10x10)
+const BLOCKS = [
+  { label: '10×10',   w: 10,  h: 10,  desc: 'Micro' },
+  { label: '20×20',   w: 20,  h: 20,  desc: 'Pequeño' },
+  { label: '50×20',   w: 50,  h: 20,  desc: 'Banner' },
+  { label: '50×50',   w: 50,  h: 50,  desc: 'Cuadrado' },
+  { label: '100×50',  w: 100, h: 50,  desc: 'Destacado' },
+  { label: '100×100', w: 100, h: 100, desc: 'Premium' },
+  { label: '200×100', w: 200, h: 100, desc: 'Grande' },
 ]
 
-export default function BuyModal({ pixelStart, available, onClose, onSuccess }) {
-  const [step, setStep] = useState(0)
-  const [pack, setPack] = useState(PACKS[4])
-  const [form, setForm] = useState({ businessName: '', email: '', whatsapp: '', category: '', description: '', destinationLink: '' })
-  const [imageFile, setImageFile] = useState(null)
+export default function BuyModal({ position, onClose, onSuccess }) {
+  const [step, setStep]   = useState(0)
+  const [block, setBlock] = useState(BLOCKS[3])
+  const [form, setForm]   = useState({ businessName: '', email: '', whatsapp: '', category: '', description: '', destinationLink: '' })
+  const [imageFile, setImageFile]     = useState(null)
   const [imagePreview, setImagePreview] = useState(null)
   const [errors, setErrors] = useState({})
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading]   = useState(false)
   const [statusMsg, setStatusMsg] = useState('')
   const fileRef = useRef()
 
-  const validPacks = PACKS.filter(p => p.pixels <= available)
-  const price = pack.pixels  // S/1 per pixel
+  if (!position) return null
 
-  function validate0() {
-    if (pack.pixels > available) return { pack: `Solo quedan ${available} px disponibles` }
-    return {}
-  }
+  const pixels = block.w * block.h
+  const price  = pixels  // S/1 per pixel
+
+  function validate0() { return {} }
   function validate1() {
     const e = {}
     if (!form.businessName.trim()) e.businessName = 'Requerido'
@@ -74,8 +75,11 @@ export default function BuyModal({ pixelStart, available, onClose, onSuccess }) 
           image_url:        imageUrl,
           destination_link: form.destinationLink,
           description:      form.description,
-          pixel_count:      pack.pixels,
-          pixel_start:      pixelStart,
+          pixel_count:      pixels,
+          px:               position.x,
+          py:               position.y,
+          pw:               block.w,
+          ph:               block.h,
           amount:           price,
           currency:         'PEN',
           status:           'pending',
@@ -97,7 +101,7 @@ export default function BuyModal({ pixelStart, available, onClose, onSuccess }) 
           body: JSON.stringify({
             email:      form.email,
             purchaseId: purchase.id,
-            pixelCount: pack.pixels,
+            pixelCount: pixels,
             price,
           }),
         }
@@ -112,7 +116,7 @@ export default function BuyModal({ pixelStart, available, onClose, onSuccess }) 
     }
   }
 
-  const STEPS = ['Elige píxeles', 'Tu negocio', 'Confirmar']
+  const STEPS = ['Elige tamaño', 'Tu negocio', 'Confirmar']
   const ic = err => `w-full bg-gray-800 border rounded-xl px-3 py-2.5 text-white placeholder-gray-600 text-sm focus:outline-none transition-colors ${err ? 'border-red-500/50' : 'border-gray-700 focus:border-brand-500'}`
 
   return (
@@ -122,21 +126,21 @@ export default function BuyModal({ pixelStart, available, onClose, onSuccess }) 
 
         {/* Header */}
         <div className="rounded-t-2xl p-5 border-b border-white/10"
-             style={{ background: 'linear-gradient(135deg, #f9731622, #f9731608)', borderTop: '3px solid #f97316' }}>
+             style={{ background: 'linear-gradient(135deg,#f9731622,#f9731608)', borderTop: '3px solid #f97316' }}>
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-widest mb-1 text-brand-500">
-                Píxel #{pixelStart + 1}
+                Posición ({position.x}, {position.y})
               </div>
-              <h2 className="text-lg font-bold text-white">Compra tu espacio en el muro</h2>
-              <p className="text-gray-500 text-xs mt-1">{available.toLocaleString()} px disponibles · S/1 por píxel</p>
+              <h2 className="text-lg font-bold text-white">Reserva tu espacio en el muro</h2>
+              <p className="text-gray-500 text-xs mt-1">S/1 por píxel · pago único · visible para siempre</p>
             </div>
             <button onClick={onClose} className="text-gray-500 hover:text-white text-xl w-8 h-8 flex items-center justify-center rounded-lg hover:bg-white/5">✕</button>
           </div>
         </div>
 
         <div className="p-5">
-          {/* Step dots */}
+          {/* Steps */}
           <div className="flex items-center justify-center gap-3 mb-5">
             {STEPS.map((label, i) => (
               <div key={label} className="flex items-center gap-2">
@@ -153,27 +157,29 @@ export default function BuyModal({ pixelStart, available, onClose, onSuccess }) 
             ))}
           </div>
 
-          {/* Step 0: choose pixels */}
+          {/* Step 0: block size */}
           {step === 0 && (
             <div className="space-y-2 animate-fade-in">
-              {(validPacks.length ? validPacks : PACKS).map(p => {
-                const unavail = p.pixels > available
-                return (
-                  <button key={p.pixels} onClick={() => !unavail && setPack(p)} disabled={unavail}
-                          className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
-                            unavail ? 'border-gray-800 opacity-40 cursor-not-allowed' :
-                            pack.pixels === p.pixels ? 'border-brand-500 bg-brand-500/10' :
-                            'border-gray-700 bg-gray-800/50 hover:border-gray-600'
-                          }`}>
+              <p className="text-gray-500 text-xs mb-3">Elige el tamaño de tu espacio:</p>
+              {BLOCKS.map(b => (
+                <button key={b.label} onClick={() => setBlock(b)}
+                        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl border transition-all ${
+                          block.label === b.label
+                            ? 'border-brand-500 bg-brand-500/10'
+                            : 'border-gray-700 bg-gray-800/50 hover:border-gray-600'
+                        }`}>
+                  <div className="flex items-center gap-3">
+                    {/* Mini preview */}
+                    <div className="bg-brand-500/20 border border-brand-500/40 rounded flex-shrink-0"
+                         style={{ width: Math.min(b.w / 2, 48) + 'px', height: Math.min(b.h / 2, 32) + 'px' }} />
                     <div className="text-left">
-                      <div className="text-white font-bold text-sm">{p.label}</div>
-                      <div className="text-gray-500 text-xs">{p.desc}</div>
+                      <div className="text-white font-bold text-sm">{b.label} px</div>
+                      <div className="text-gray-500 text-xs">{b.desc} · {(b.w * b.h).toLocaleString()} píxeles</div>
                     </div>
-                    <div className="text-brand-500 font-extrabold">S/{p.pixels}</div>
-                  </button>
-                )
-              })}
-              {errors.pack && <p className="text-red-400 text-sm">{errors.pack}</p>}
+                  </div>
+                  <div className="text-brand-500 font-extrabold">S/{(b.w * b.h).toLocaleString()}</div>
+                </button>
+              ))}
             </div>
           )}
 
@@ -208,7 +214,7 @@ export default function BuyModal({ pixelStart, available, onClose, onSuccess }) 
                 <div onClick={() => fileRef.current?.click()}
                      className={`border-2 border-dashed rounded-xl p-4 text-center cursor-pointer transition-colors ${errors.image ? 'border-red-500/50' : 'border-gray-700 hover:border-brand-500/50'}`}>
                   {imagePreview
-                    ? <img src={imagePreview} alt="" className="h-20 mx-auto rounded-lg object-cover" />
+                    ? <img src={imagePreview} alt="" className="h-20 mx-auto rounded-lg object-contain" />
                     : <><div className="text-2xl mb-1">📸</div><p className="text-gray-400 text-sm">Clic para subir logo (máx 5MB)</p></>}
                   <input ref={fileRef} type="file" accept="image/*" onChange={handleImage} className="hidden" />
                 </div>
@@ -230,21 +236,21 @@ export default function BuyModal({ pixelStart, available, onClose, onSuccess }) 
           {step === 2 && (
             <div className="animate-fade-in">
               <div className="bg-gray-800/50 rounded-xl p-4 mb-5 space-y-2">
-                <Row label="Píxeles" value={`${pack.pixels.toLocaleString()} px`} />
-                <Row label="Desde píxel" value={`#${pixelStart + 1}`} />
+                <Row label="Posición" value={`(${position.x}, ${position.y})`} />
+                <Row label="Tamaño" value={`${block.label} px = ${pixels.toLocaleString()} píxeles`} />
                 <Row label="Negocio" value={form.businessName} />
                 <Row label="Email" value={form.email} />
                 {imagePreview && (
                   <div className="flex justify-between items-center">
                     <span className="text-gray-500 text-sm">Imagen</span>
-                    <img src={imagePreview} alt="" className="h-10 w-10 rounded-lg object-cover" />
+                    <img src={imagePreview} alt="" className="h-10 w-16 rounded-lg object-contain bg-gray-700" />
                   </div>
                 )}
                 <div className="border-t border-white/10 pt-3 flex justify-between items-center">
                   <span className="text-white font-semibold">Total</span>
                   <div className="text-right">
                     <div className="font-extrabold text-xl text-brand-500">S/{price.toLocaleString()}</div>
-                    <div className="text-gray-600 text-xs">{pack.pixels.toLocaleString()} px × S/1</div>
+                    <div className="text-gray-600 text-xs">{pixels.toLocaleString()} px × S/1</div>
                   </div>
                 </div>
               </div>
