@@ -1,109 +1,69 @@
 import { useState } from 'react'
 import Hero from '../components/Hero'
-import LimaLeafletMap from '../components/LimaLeafletMap'
-import DistrictModal from '../components/DistrictModal'
+import PixelGrid from '../components/PixelGrid'
+import BuyModal from '../components/BuyModal'
 import FAQ from '../components/FAQ'
 import Footer from '../components/Footer'
-import { useDistricts } from '../hooks/useDistricts'
+import { usePurchases } from '../hooks/usePurchases'
+
+const TOTAL = 1000
 
 export default function Home() {
-  const { districts, list, loading, totalStats, reload } = useDistricts()
-  const [selectedDistrict, setSelectedDistrict] = useState(null)
-  const [selectedSpace, setSelectedSpace]       = useState(null)
+  const { purchases, loading, soldPixels, reload } = usePurchases()
+  const [selected, setSelected] = useState(null)
 
-  function handleSelectDistrict(districtDef, spaceRow) {
-    setSelectedDistrict(districtDef)
-    setSelectedSpace(spaceRow)
-  }
-
-  const totalPixels  = totalStats.totalPixels
-  const soldPixels   = totalStats.soldPixels
-  const pct          = totalPixels ? ((soldPixels / totalPixels) * 100).toFixed(2) : 0
+  const available = TOTAL - soldPixels
 
   return (
     <>
-      <Hero onCTA={() => document.getElementById('map-section')?.scrollIntoView({ behavior: 'smooth' })} />
+      <Hero onCTA={() => document.getElementById('muro-section')?.scrollIntoView({ behavior: 'smooth' })} />
 
-      {/* Map section */}
-      <section id="map-section" className="bg-gray-950 py-14 px-4">
-        <div className="max-w-6xl mx-auto">
+      <section id="muro-section" className="bg-gray-950 py-14 px-4">
+        <div className="max-w-4xl mx-auto">
 
-          {/* Header */}
           <div className="text-center mb-10">
             <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 text-brand-500 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
               <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse-slow" />
-              Mapa interactivo · 20 distritos de Lima
+              {available} píxeles disponibles · S/1 cada uno
             </div>
             <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-3">
-              Tu negocio en el mapa de Lima
+              El Muro del Millón
             </h2>
-            <p className="text-gray-400 max-w-xl mx-auto">
-              Haz clic en cualquier distrito para comprar píxeles. Tu logo aparece visible en ese barrio.
+            <p className="text-gray-400 max-w-lg mx-auto">
+              1,000 píxeles. Cada uno vale S/1. Haz clic en cualquier espacio libre para poner tu negocio.
             </p>
           </div>
 
-          <div className="flex flex-col lg:flex-row gap-8 items-start">
-            {/* Map */}
-            <div className="flex-1 min-w-0">
-              <LimaLeafletMap spaceData={districts} onSelectDistrict={handleSelectDistrict} />
+          {loading ? (
+            <div className="flex items-center justify-center h-48">
+              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
             </div>
+          ) : (
+            <PixelGrid
+              purchases={purchases}
+              onSelect={({ pixelStart }) => setSelected(pixelStart)}
+            />
+          )}
 
-            {/* Sidebar: district list */}
-            <div className="w-full lg:w-72 shrink-0">
-              <h3 className="text-white font-bold mb-4 text-sm uppercase tracking-wider">Distritos disponibles</h3>
-              <div className="space-y-2 max-h-[70vh] overflow-y-auto scrollbar-hide">
-                {list
-                  .filter(s => s.status !== 'full')
-                  .sort((a, b) => b.base_price_per_px - a.base_price_per_px)
-                  .map(s => {
-                    const pct = Math.round((s.sold_pixels / s.total_pixels) * 100)
-                    const available = s.total_pixels - s.sold_pixels
-                    return (
-                      <button
-                        key={s.district_slug}
-                        onClick={() => {
-                          handleSelectDistrict(
-                            { name: s.district, slug: s.district_slug, color: '#f97316', price: s.base_price_per_px },
-                            s
-                          )
-                        }}
-                        className="w-full text-left bg-gray-900 hover:bg-gray-800 border border-white/5 hover:border-white/15 rounded-xl p-3 transition-all group"
-                      >
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-white text-sm font-semibold group-hover:text-brand-400 transition-colors">
-                            {s.district}
-                          </span>
-                          <span className="text-brand-500 text-sm font-bold">S/{s.base_price_per_px}/px</span>
-                        </div>
-                        <div className="w-full bg-gray-800 rounded-full h-1 mb-1.5">
-                          <div className="h-1 rounded-full bg-brand-500 transition-all"
-                               style={{ width: `${pct}%` }} />
-                        </div>
-                        <div className="flex justify-between text-xs text-gray-600">
-                          <span>{pct}% ocupado</span>
-                          <span className="text-green-500">{available.toLocaleString()} px libres</span>
-                        </div>
-                      </button>
-                    )
-                  })}
-              </div>
-
-              {/* Global progress */}
-              <div className="mt-6 bg-gray-900 border border-white/10 rounded-xl p-4">
-                <div className="flex justify-between text-xs text-gray-500 mb-2">
-                  <span>Lima completa</span>
-                  <span>{pct}% vendido</span>
-                </div>
-                <div className="w-full bg-gray-800 rounded-full h-2 mb-2">
-                  <div className="h-2 rounded-full bg-gradient-to-r from-brand-500 to-orange-400 transition-all"
-                       style={{ width: `${Math.max(0.5, pct)}%` }} />
-                </div>
-                <div className="text-center">
-                  <div className="text-white font-extrabold text-xl">{soldPixels.toLocaleString()}</div>
-                  <div className="text-gray-600 text-xs">de {totalPixels.toLocaleString()} píxeles vendidos</div>
-                </div>
-              </div>
-            </div>
+          {/* CTA */}
+          <div className="mt-8 text-center">
+            <button
+              onClick={() => {
+                const firstFree = (() => {
+                  const owned = new Set()
+                  for (const p of purchases) {
+                    for (let i = p.pixel_start; i < p.pixel_start + p.pixel_count; i++) owned.add(i)
+                  }
+                  for (let i = 0; i < TOTAL; i++) if (!owned.has(i)) return i
+                  return null
+                })()
+                if (firstFree !== null) setSelected(firstFree)
+              }}
+              className="bg-brand-500 hover:bg-brand-600 text-white font-bold px-8 py-4 rounded-xl text-lg transition-all shadow-lg shadow-brand-500/25"
+            >
+              Comprar mi espacio →
+            </button>
+            <p className="text-gray-600 text-xs mt-3">Pago único · Tu logo visible para siempre</p>
           </div>
         </div>
       </section>
@@ -111,12 +71,12 @@ export default function Home() {
       <FAQ />
       <Footer />
 
-      {selectedDistrict && (
-        <DistrictModal
-          district={selectedDistrict}
-          spaceData={districts}
-          onClose={() => { setSelectedDistrict(null); setSelectedSpace(null) }}
-          onSuccess={() => { setSelectedDistrict(null); setSelectedSpace(null); reload() }}
+      {selected !== null && (
+        <BuyModal
+          pixelStart={selected}
+          available={available}
+          onClose={() => setSelected(null)}
+          onSuccess={() => { setSelected(null); reload() }}
         />
       )}
     </>
