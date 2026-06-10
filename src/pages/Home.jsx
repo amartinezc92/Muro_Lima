@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import Hero from '../components/Hero'
-import LimaMap, { DISTRICTS } from '../components/LimaMap'
+import LimaLeafletMap from '../components/LimaLeafletMap'
 import DistrictModal from '../components/DistrictModal'
 import FAQ from '../components/FAQ'
 import Footer from '../components/Footer'
@@ -45,16 +45,7 @@ export default function Home() {
           <div className="flex flex-col lg:flex-row gap-8 items-start">
             {/* Map */}
             <div className="flex-1 min-w-0">
-              {loading ? (
-                <div className="flex items-center justify-center h-96">
-                  <div className="text-center text-gray-500">
-                    <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-                    Cargando mapa...
-                  </div>
-                </div>
-              ) : (
-                <LimaMap spaceData={districts} onSelectDistrict={handleSelectDistrict} />
-              )}
+              <LimaLeafletMap spaceData={districts} onSelectDistrict={handleSelectDistrict} />
             </div>
 
             {/* Sidebar: district list */}
