@@ -170,17 +170,29 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
     draw()
   }
 
-  // ── Wheel zoom ────────────────────────────────────────────────────
+  // ── Wheel: zoom with Ctrl/pinch, pan otherwise ───────────────────
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
     function onWheel(e) {
       e.preventDefault()
-      const rect = canvas.getBoundingClientRect()
-      const cx = (e.clientX - rect.left) * (canvas.width / rect.width)
-      const cy = (e.clientY - rect.top)  * (canvas.height / rect.height)
-      const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
-      applyZoom(stateRef.current.zoom * factor, cx, cy)
+      const s = stateRef.current
+      if (e.ctrlKey || e.metaKey) {
+        // Ctrl+scroll = zoom centered on cursor
+        const rect = canvas.getBoundingClientRect()
+        const cx = (e.clientX - rect.left) * (canvas.width  / rect.width)
+        const cy = (e.clientY - rect.top)  * (canvas.height / rect.height)
+        const factor = e.deltaY < 0 ? 1.15 : 1 / 1.15
+        applyZoom(s.zoom * factor, cx, cy)
+      } else {
+        // Plain scroll = pan (when zoomed)
+        if (s.zoom <= 1) return
+        s.panX += e.deltaX / s.zoom
+        s.panY += e.deltaY / s.zoom
+        clampPan()
+        setZoom(z => z) // trigger re-render
+        draw()
+      }
     }
     canvas.addEventListener('wheel', onWheel, { passive: false })
     return () => canvas.removeEventListener('wheel', onWheel)
@@ -191,10 +203,10 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
     const { x, y, cx, cy } = canvasPosFromEvent(e)
     const s = stateRef.current
     dragRef.current = {
-      mode:    s.zoom > 1.5 ? 'pan' : 'select',
-      startX:  x, startY: y,
+      mode: 'select',
+      startX: x, startY: y,
       startCx: cx, startCy: cy,
-      lastCx:  cx, lastCy:  cy,
+      lastCx: cx, lastCy: cy,
     }
   }
 
@@ -274,7 +286,7 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
       <div ref={wrapRef} className="relative w-full rounded-xl overflow-hidden border border-zinc-900 bg-[#09090b]">
         <canvas
           ref={canvasRef}
-          style={{ display: 'block', width: '100%', imageRendering: 'pixelated', cursor: isPanning ? 'grab' : 'crosshair' }}
+          style={{ display: 'block', width: '100%', imageRendering: 'pixelated', cursor: 'crosshair' }}
           onMouseDown={onMouseDown}
           onMouseMove={onMouseMove}
           onMouseUp={onMouseUp}
@@ -299,7 +311,7 @@ export default function MillionCanvas({ purchases = [], onSelect }) {
 
         {/* Mode hint */}
         <div className="absolute bottom-3 left-3 text-zinc-700 text-xs pointer-events-none">
-          {isPanning ? 'arrastra para mover · clic para comprar' : 'arrastra para seleccionar · scroll para zoom'}
+          {zoom > 1 ? 'arrastra para seleccionar · scroll para mover' : 'arrastra para seleccionar · Ctrl+scroll para zoom'}
         </div>
       </div>
 
