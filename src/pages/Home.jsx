@@ -37,16 +37,6 @@ export default function Home() {
             Arrastra sobre el muro para seleccionar tu espacio · S/1 por píxel
           </p>
 
-          {/* CTA */}
-          <div className="flex justify-center mt-8">
-            <button
-              onClick={() => setSelection({ x: 0, y: 0, w: 10, h: 10, pixels: 100 })}
-              className="group bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white font-medium px-6 py-3 rounded-xl text-sm transition-all"
-            >
-              Comprar sin seleccionar
-              <span className="ml-1.5 text-zinc-600 group-hover:text-zinc-400 transition-colors">→</span>
-            </button>
-          </div>
 
         </div>
       </section>
