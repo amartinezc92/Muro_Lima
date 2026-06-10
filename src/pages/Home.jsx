@@ -12,50 +12,62 @@ export default function Home() {
   const { purchases, loading, soldPixels, reload } = usePurchases()
   const [selection, setSelection] = useState(null)
 
-  const pct = ((soldPixels / TOTAL) * 100).toFixed(2)
+  const available = (TOTAL - soldPixels).toLocaleString()
+  const pct = ((soldPixels / TOTAL) * 100).toFixed(4)
 
   return (
-    <>
+    <div className="bg-[#09090b]">
       <Hero onCTA={() => document.getElementById('muro-section')?.scrollIntoView({ behavior: 'smooth' })} />
 
-      <section id="muro-section" className="bg-gray-950 py-14 px-4">
+      <section id="muro-section" className="py-20 px-4">
         <div className="max-w-5xl mx-auto">
 
-          <div className="text-center mb-10">
-            <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/20 text-brand-500 text-xs font-semibold px-3 py-1.5 rounded-full mb-4">
-              <span className="w-1.5 h-1.5 rounded-full bg-brand-500 animate-pulse-slow" />
-              {(TOTAL - soldPixels).toLocaleString()} píxeles disponibles · S/1 cada uno
+          {/* Section header */}
+          <div className="mb-10">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-lg font-semibold text-white">El Muro</h2>
+              <span className="text-zinc-500 text-sm tabular-nums">
+                {available} px disponibles
+              </span>
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold text-white mb-3">
-              El Muro del Millón
-            </h2>
-            <p className="text-gray-400 max-w-xl mx-auto">
-              1,000,000 píxeles. Cada píxel vale S/1. Compra tu espacio, sube tu logo y queda visible para siempre.
-            </p>
+            {/* Progress bar */}
+            <div className="relative h-1 bg-zinc-900 rounded-full overflow-hidden">
+              <div
+                className="absolute inset-y-0 left-0 bg-orange-500 rounded-full transition-all duration-700"
+                style={{ width: `${Math.max(0.1, parseFloat(pct))}%` }}
+              />
+            </div>
+            <div className="flex justify-between mt-1.5">
+              <span className="text-zinc-700 text-xs">{soldPixels.toLocaleString()} vendidos</span>
+              <span className="text-zinc-700 text-xs">{pct}% ocupado</span>
+            </div>
           </div>
 
+          {/* Canvas */}
           {loading ? (
             <div className="flex items-center justify-center h-64">
-              <div className="w-8 h-8 border-2 border-brand-500 border-t-transparent rounded-full animate-spin" />
+              <div className="w-5 h-5 border border-zinc-700 border-t-orange-500 rounded-full animate-spin" />
             </div>
           ) : (
-            <MillionCanvas
-              purchases={purchases}
-              onSelect={sel => setSelection(sel)}
-            />
+            <MillionCanvas purchases={purchases} onSelect={setSelection} />
           )}
 
-          <div className="mt-8 text-center">
+          {/* Instruction */}
+          <p className="text-center text-zinc-700 text-xs mt-5 tracking-wide">
+            Arrastra sobre el muro para seleccionar tu espacio · S/1 por píxel
+          </p>
+
+          {/* CTA */}
+          <div className="flex justify-center mt-8">
             <button
               onClick={() => setSelection({ x: 0, y: 0, w: 10, h: 10, pixels: 100 })}
-              className="bg-brand-500 hover:bg-brand-600 text-white font-bold px-8 py-4 rounded-xl text-lg transition-all shadow-lg shadow-brand-500/25"
+              className="group bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 hover:border-zinc-700 text-zinc-300 hover:text-white font-medium px-6 py-3 rounded-xl text-sm transition-all"
             >
-              Comprar mi espacio →
+              Comprar sin seleccionar
+              <span className="ml-1.5 text-zinc-600 group-hover:text-zinc-400 transition-colors">→</span>
             </button>
-            <p className="text-gray-600 text-xs mt-3">
-              Arrastra en el muro para elegir tu espacio · S/1 por píxel
-            </p>
           </div>
+
         </div>
       </section>
 
@@ -69,6 +81,6 @@ export default function Home() {
           onSuccess={() => { setSelection(null); reload() }}
         />
       )}
-    </>
+    </div>
   )
 }

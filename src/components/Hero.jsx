@@ -1,113 +1,47 @@
-import { useState, useEffect } from 'react'
-
-const TESTIMONIALS = [
-  {
-    name: 'María García',
-    business: 'Café Barranco',
-    text: 'En dos semanas duplicamos nuestras reservas. El muro nos dio visibilidad que ninguna red social pudo.',
-    avatar: 'MG',
-  },
-  {
-    name: 'Carlos Ríos',
-    business: 'Studio Miraflores',
-    text: 'Pagar una vez y estar visible todo el año es increíble. Ya recuperé la inversión en el primer mes.',
-    avatar: 'CR',
-  },
-  {
-    name: 'Lucía Mendoza',
-    business: 'Boutique San Isidro',
-    text: 'Mis clientes me dicen que me encontraron en El Muro. Es la mejor inversión que hice para mi boutique.',
-    avatar: 'LM',
-  },
-]
-
-const STATS = [
-  { value: '347', label: 'Negocios visibles' },
-  { value: '2M+', label: 'Impresiones/mes' },
-  { value: '94%', label: 'Renovación' },
-]
-
 export default function Hero({ onCTA }) {
-  const [testimonialIdx, setTestimonialIdx] = useState(0)
-
-  useEffect(() => {
-    const t = setInterval(() => setTestimonialIdx(i => (i + 1) % TESTIMONIALS.length), 4000)
-    return () => clearInterval(t)
-  }, [])
-
-  const t = TESTIMONIALS[testimonialIdx]
-
   return (
-    <section className="relative bg-gradient-to-b from-black via-gray-950 to-gray-900 py-20 px-4 text-center overflow-hidden">
-      {/* Background glow */}
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-brand-500/10 blur-3xl rounded-full" />
-      </div>
+    <section className="relative min-h-[92vh] flex flex-col items-center justify-center px-4 text-center overflow-hidden bg-[#09090b]">
 
-      <div className="relative max-w-3xl mx-auto animate-fade-in">
-        <div className="inline-flex items-center gap-2 bg-brand-500/10 border border-brand-500/30 text-brand-500 text-sm font-medium px-4 py-1.5 rounded-full mb-6">
-          <span className="w-2 h-2 rounded-full bg-brand-500 animate-pulse-slow" />
-          Lima · Directorio Visual Interactivo
+      {/* Ambient glow */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[800px] h-[400px] bg-orange-500/8 blur-[120px] rounded-full pointer-events-none" />
+
+      <div className="relative z-10 max-w-2xl mx-auto flex flex-col items-center gap-6">
+
+        {/* Live badge */}
+        <div className="animate-fade-up inline-flex items-center gap-2 border border-zinc-800 bg-zinc-900/60 backdrop-blur text-zinc-400 text-xs font-medium px-3.5 py-1.5 rounded-full">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse-slow" />
+          1,000,000 píxeles disponibles
         </div>
 
-        <h1 className="text-4xl sm:text-6xl font-extrabold text-white leading-tight mb-6">
-          Tu negocio visible<br />
-          <span className="text-brand-500">toda Lima</span> lo ve
+        {/* Headline */}
+        <h1 className="animate-fade-up delay-100 text-5xl sm:text-7xl font-black text-white leading-[1.05] tracking-tight">
+          El Muro<br />
+          <span className="text-orange-500">del Millón</span>
         </h1>
 
-        <p className="text-gray-400 text-lg sm:text-xl mb-8 max-w-xl mx-auto">
-          El muro digital donde los mejores negocios independientes de Lima compran su espacio
-          y millones de personas los descubren. Pago único · 12 meses.
+        {/* Subheadline */}
+        <p className="animate-fade-up delay-200 text-zinc-400 text-lg sm:text-xl leading-relaxed max-w-md">
+          Compra los píxeles que quieras. Sube tu imagen. Queda visible para siempre.
         </p>
 
-        {/* Stats */}
-        <div className="flex flex-wrap justify-center gap-8 mb-10">
-          {STATS.map(s => (
-            <div key={s.label} className="text-center">
-              <div className="text-3xl font-extrabold text-white">{s.value}</div>
-              <div className="text-gray-500 text-sm mt-1">{s.label}</div>
-            </div>
-          ))}
-        </div>
-
         {/* CTA */}
-        <div className="flex flex-col sm:flex-row gap-4 justify-center mb-14">
+        <div className="animate-fade-up delay-300 flex flex-col sm:flex-row items-center gap-3 mt-2">
           <button
             onClick={onCTA}
-            className="bg-brand-500 hover:bg-brand-600 text-white font-bold px-8 py-4 rounded-xl text-lg transition-all shadow-lg shadow-brand-500/30 hover:shadow-brand-500/50 hover:-translate-y-0.5"
+            className="group relative bg-orange-500 hover:bg-orange-400 text-white font-semibold px-7 py-3.5 rounded-xl text-base transition-all duration-200 shadow-[0_0_0_0_theme(colors.orange.500)] hover:shadow-[0_0_24px_4px_theme(colors.orange.500/30)]"
           >
-            Compra tu espacio →
+            Comprar mi espacio
+            <span className="ml-2 inline-block transition-transform group-hover:translate-x-0.5">→</span>
           </button>
-          <a
-            href="#grid-section"
-            className="border border-white/20 text-gray-300 hover:text-white hover:border-white/40 font-medium px-8 py-4 rounded-xl text-lg transition-colors"
-          >
-            Ver la grilla
-          </a>
+          <span className="text-zinc-600 text-sm">S/1 por píxel · pago único</span>
         </div>
 
-        {/* Rotating testimonial */}
-        <div className="bg-white/5 border border-white/10 rounded-2xl p-6 max-w-md mx-auto transition-all duration-500">
-          <p className="text-gray-300 italic mb-4">"{t.text}"</p>
-          <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-full bg-brand-500 flex items-center justify-center text-white text-xs font-bold">
-              {t.avatar}
-            </div>
-            <div className="text-left">
-              <div className="text-white text-sm font-semibold">{t.name}</div>
-              <div className="text-gray-500 text-xs">{t.business}</div>
-            </div>
-            <div className="ml-auto flex gap-1">
-              {TESTIMONIALS.map((_, i) => (
-                <button
-                  key={i}
-                  onClick={() => setTestimonialIdx(i)}
-                  className={`w-1.5 h-1.5 rounded-full transition-colors ${i === testimonialIdx ? 'bg-brand-500' : 'bg-white/20'}`}
-                />
-              ))}
-            </div>
-          </div>
-        </div>
+      </div>
+
+      {/* Scroll hint */}
+      <div className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-zinc-700 text-xs animate-fade-in">
+        <div className="w-px h-10 bg-gradient-to-b from-transparent to-zinc-700" />
+        scroll
       </div>
     </section>
   )
